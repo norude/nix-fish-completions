@@ -1,6 +1,5 @@
-#compdef nixos-version
-#autoload
-complete nixos-version -f
+__load-common-nix-options
+complete nixos-version -x
 
 complete nixos-version -l "hash" -l "revision" -d "Show the full SHA1 hash of the Git commit from which this configuration was built."
 complete nixos-version -l "configuration-revision" -d "Show the configuration revision if available."
