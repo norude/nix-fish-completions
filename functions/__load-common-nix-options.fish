@@ -108,10 +108,6 @@ function _nix_complete_dotnix_files
 end  # see: https://channels.nixos.org/
 
 function _nix_complete_includes
-    function __nix_command_has_equal_sign
-        string match -q "*=*" -- (commandline -cpt)
-        return $status
-    end
     function __nix_get_path_names
         for p in $NIX_PATH
             if string match -q "*=*" -- $p 
@@ -120,8 +116,8 @@ function _nix_complete_includes
         end
     end
     complete $argv -kxa "(__fish_complete_directories)"
-    complete -n "not __nix_command_has_equal_sign" $argv -kxa "(__nix_get_path_names)="
-    complete -n "__nix_command_has_equal_sign" $argv -kxa "(__nix_get_path_names)=(_nix_complete_dotnix_files)"
+    complete -n "not string match -q '*=*' -- (commandline -cpt) " $argv -kxa "(__nix_get_path_names)="
+    complete -n "string match -q '*=*' -- (commandline -cpt) " $argv -kxa "(commandline -cpt|string replace -r '=[^=]*\$' '')=(_nix_complete_dotnix_files)"
     return
 end
 
