@@ -21,7 +21,7 @@ end
 
 function prompt_nix_shell_setup
     functions --copy fish_prompt __nix_shell_previous_prompt # if prompt_nix_shell_setup is called twice, this will fail
-    function fish_prompt 
+    function fish_prompt
         # call the previous prompt first to not disturb $status
         set -l prompt "$(__nix_shell_previous_prompt)"
         prompt_nix_shell_precmd

@@ -110,7 +110,7 @@ end  # see: https://channels.nixos.org/
 function _nix_complete_includes
     function __nix_get_path_names
         for p in $NIX_PATH
-            if string match -q "*=*" -- $p 
+            if string match -q "*=*" -- $p
                 echo (string split -f1 -- "=" "$p")
             end
         end
