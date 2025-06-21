@@ -616,7 +616,7 @@ function __nix_common_nixos_rebuild
 end
 
 function __nix_common_nixos_build_vms
-#     '*--option[set Nix configuration option]:options:_nix_options:value:_nix_options_value'
+    complete $argv -l option -d "set Nix configuration option" -xa "(_nix_options) (_nix_options_value)"
 end
 
 function __nix_common_store_opts
