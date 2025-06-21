@@ -9,4 +9,3 @@ complete nix-copy-closure -l use-substitutes -s s -d "Download files from the bi
 
 complete nix-copy-closure -n __fish_use_subcommand -n "not string match -q '*@*' -- (commandline -cpt)" -xa "(__fish_complete_users)"
 complete nix-copy-closure -n __fish_use_subcommand -n "string match -q '*@*' -- (commandline -cpt)" -xa "(__fish_complete_user_at_hosts)"
-
