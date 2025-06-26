@@ -147,36 +147,35 @@ end
 
 # Generate nix code creating the default expression used by 'nix-env -iA'
 function _nix_gen_defexpr
-#     setopt local_options null_glob
-#     local -A result # name -> path map
 
-#     # Search depth first for directories containing 'default.nix'
-#     # nix-env -iA prioritize the user's channels in case of name collision
-#     # Not sure how collisions in user-created directories are resolved.
-#     local -aU initialQueue=($1/channels $1/channels_root $1/*)
-#     local -a queue=($initialQueue)
+    set -l result_keys
+    set -l result_values
+    # Search depth first for directories containing 'default.nix'
+    # nix-env -iA prioritize the user's channels in case of name collision
+    # Not sure how collisions in user-created directories are resolved.
+    set -l queue $argv[1]/channels $argv[1]/channels_root $argv[1]/*
+    set queue (string join \n -- $queue | sort -u)
 
-#     while [[ ${#queue} > 0 ]]; do
-#         local current=$queue[1]
-#         shift queue
-#         if [[ -e $current/default.nix ]]; then
-#             local name=$(basename $current)
-#             if [[ -z $result[$name] ]]; then
-#                 result[$name]=$current
-#             fi
-#         else
-#             queue=($current/* $queue)
-#         fi
-#     done
+    while test (count $queue) -gt 0
+        set -l current $queue[1]
+        set queue queue[2..]
+        if test -e "$current/default.nix"
+            set -l name (basename "$current")
+            if contains -- $name $result_keys
+                set -p queue $current/*
+            else
+                set -a result_values "$current"
+                set -a result_keys "$name"
+            end
+        end
+    end
 
-#     local nix_expr="{\n"
-#     for name expr_path in ${(kv)result}; do
-#         nix_expr+="${name} = import ${expr_path};"
-#         nix_expr+="\n"
-#     done
-#     nix_expr+="}"
-
-#     echo $nix_expr
+    set -l nix_expr "{"
+    for i in seq (count $result_keys)
+        set -a nix_expr "$result_keys[$i] = import $result_values[$i];"
+    end
+    set -a nix_expr "}"
+    string join \n -- nix_expr
 end
 
 
@@ -300,10 +299,10 @@ function _nix_complete_attr_paths
                 break
             end
         end
-    else #FIXME: for nix-env and nix
-#         if [[ $service == nix-env ]]; then
-#             defexpr=$(_nix_gen_defexpr ~/.nix-defexpr)
-
+    else 
+        if test "$service" = "nix-env"
+            set defexpr (_nix_gen_defexpr ~/.nix-defexpr)
+        #FIXME: for nix
 #         elif [[ $service == nix ]]; then
 #             # Extract the channels from NIX_PATH and -I/--include
 #             local -a channels=(${(s.:.)NIX_PATH})
@@ -330,7 +329,7 @@ function _nix_complete_attr_paths
 #                 defexpr+="$name = import <${name}>; "
 #             done
 #             defexpr+=' }'
-#         fi
+        end
     end
 
     if test -n "$defexpr"
@@ -597,15 +596,18 @@ function __nix_common_nixos_rebuild
     complete $argv -l keep-failed -s K -d "keep failed builds (usually in /tmp)"
     complete $argv -l fallback -d "If binary download fails, fall back on building from source"
     complete $argv -l show-trace -d "Print stack trace of evaluation errors"
-    complete $argv -l option -d "set Nix configuration option" -xa "(_nix_options) (_nix_options_value)"
+    complete $argv -l option -xa "(_nix_options) (_nix_options_value)"
+    complete $argv -l option -d "set Nix configuration option"
 end
 
 function __nix_common_nixos_build_vms
-    complete $argv -l option -d "set Nix configuration option" -xa "(_nix_options) (_nix_options_value)"
+    complete $argv -l option -xa "(_nix_options) (_nix_options_value)"
+    complete $argv -l option -d "set Nix configuration option"
 end
 
 function __nix_common_store_opts
-    complete $argv -l add-root -d "register result as a root of the garbage collector" -xa "(__fish_complete_directories)"
+    complete $argv -l add-root -xa "(__fish_complete_directories)"
+    complete $argv -l add-root -d "register result as a root of the garbage collector"
     complete $argv -l indirect -d "store gc root outside GC roots directory"
 end
 
@@ -629,8 +631,10 @@ function __nix_common_opts
     _nix_complete_includes $argv -l include
     complete $argv -l include -d "add a path to the list of locations used to look up <...> file names"
 
-    complete $argv -l arg -d "argument to pass to the Nix function" -xa "(_nix_complete_function_arg)"
-    complete $argv -l argstr -d "pass a string" -xa "(_nix_complete_function_arg)"
+    complete $argv -l arg -xa "(_nix_complete_function_arg)"
+    complete $argv -l arg -d "argument to pass to the Nix function"
+    complete $argv -l argstr -xa "(_nix_complete_function_arg)"
+    complete $argv -l argstr -d "pass a string"
 end
 
 # Options for nix-store --realise, used by nix-build

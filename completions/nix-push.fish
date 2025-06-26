@@ -1,7 +1,8 @@
 __load-common-nix-options
 complete nix-push -r
 
-complete nix-push -l dest -d "Set the destination directory" -xa "(__fish_complete_directories (commandline -cpt) 'Destination directory')"
+complete nix-push -l dest -xa "(__fish_complete_directories (commandline -cpt) 'Destination directory')"
+complete nix-push -l dest -d "Set the destination directory"
 complete nix-push -l bzip2 -d "Compress NARs using bzip2 instead of xz -9"
 complete nix-push -l none -d "Do not compress NARs"
 complete nix-push -l force -d "Overwrite .narinfo files if they already exist"

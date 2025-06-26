@@ -17,4 +17,5 @@ complete nixos-rebuild -l install-bootloader -d "(Re)install bootloader on the c
 complete nixos-rebuild -l no-build-nix -d "Don't build Nix package manager]"
 complete nixos-rebuild -l fast -d "Equivalent to --no-build-nix --show-trace"
 complete nixos-rebuild -l rollback -d "Roll back to the previous configuration"
-complete nixos-rebuild -l profile-name -s p -d "Profile to use to track current and previous system configurations" -xa "(_nix_profiles)"
+complete nixos-rebuild -l profile-name -s p -xa "(_nix_profiles)"
+complete nixos-rebuild -l profile-name -s p -d "Profile to use to track current and previous system configurations"
