@@ -44,9 +44,8 @@ function _nix_shortcuts
 end
 
 function _nix_path
-#   _alternative \
-#     'nixpkgs:Nixpkgs:_nix_shortcuts' \
-#     'path:File Path:_nix_complete_dotnix_files'
+    complete $argv -kxa "(__fish_complete_directories)"
+    complete $argv -kxa "(_nix_complete_dotnix_files)"
 end
 
 function _nix_complete_dotnix_files
@@ -186,107 +185,88 @@ end
 # eg. _arguments won't pass it options which it doesn't expect, ie:
 #     `: _nix_attr_paths`
 function _nix_attr_paths
+    set -l cur (string unescape -- (commandline -ptc))
 
-#     local cur=${${words[$CURRENT]#(\'|\")}%(\'|\")}
+    set -l defexpr $argv[1]
+    set -l attr_path ""
+    if string match -q '*.*' -- $cur
+        set attr_path (string replace -r '\.[^.]*$' '' -- $cur)
+    end
+    set -l paths (string split -n '.' -- $attr_path)
+    # Avoid ("") when empty
+    set -l paths (for p in $paths; echo \"$p\"; end)
 
-#     # Starting with '.' causes _sep_parts to complain, so exit early.
-#     # This also guards against error output when completion './files' with nix.
-#     if [[ $cur == .* ]]; then
-#         return
-#     fi
+    # Auto call any functions in the attribute path. This isn't a language
+    # feature, but done by nix when passing attributes on the command line.
+    set -l get_attrs_expression "let"
+    set -a get_attrs_expression "autocall = setOrLambda:"
+    set -a get_attrs_expression "if builtins.isFunction setOrLambda then"
+    set -a get_attrs_expression "setOrLambda {}"
+    set -a get_attrs_expression "else"
+    set -a get_attrs_expression "setOrLambda;"
+    set -a get_attrs_expression "top = autocall ($defexpr);"
+    set -a get_attrs_expression "names = [ $(string join " " -- $paths) ];"
+    # Returns attr.name calling it if it's a function
+    set -a get_attrs_expression "reducer = set: name:"
+    set -a get_attrs_expression "autocall (builtins.getAttr name set);"
+    set -a get_attrs_expression "result = builtins.foldl' reducer top names; #'"
+    set -a get_attrs_expression "in"
+    set -a get_attrs_expression "if builtins.isAttrs result then"
+    set -a get_attrs_expression "builtins.attrNames result"
+    set -a get_attrs_expression "else"
+    set -a get_attrs_expression "\"\""
+    set -l result (string join \n -- $get_attrs_expression | _nix_eval_stdin 2>&1)
+    if test $status -gt 0
+        # _message "Eval failed, can't complete (an URL might not be cached):\n$result"
+        return 1
+    end
+    set -l prefix (string split -n '.' -- "$attr_path" | string join "." ) # Remove double dots
+    if test -n "$prefix"
+        set prefix "$prefix."
+    end
 
-#     local defexpr=$1
-#     local attr_path=""
-#     if [[ $cur == *.* ]]; then
-#         attr_path=${cur%.*}
-#     fi
-
-#     # attr1.attr3 -> ("attr1" "attr2")
-#     local -a paths=(${(s,.,)attr_path})
-#     # Add quotes in a second step to avoid ("") when empty
-#     paths=(${${paths/%/\"}/#/\"})
-
-#     # Auto call any functions in the attribute path. This isn't a language
-#     # feature, but done by nix when passing attributes on the command line.
-#     local -a result
-#     result=($(_nix_eval_stdin <<NIX_FILE
-#         let
-#           autocall = setOrLambda:
-#               if builtins.isFunction setOrLambda then
-#                  setOrLambda {}
-#               else
-#                  setOrLambda;
-
-#           top = autocall ($defexpr);
-#           names = [ ${paths[*]} ];
-
-#           # Returns attr.name calling it if it's a function
-#           reducer = set: name:
-#               autocall (builtins.getAttr name set);
-#           result = builtins.foldl' reducer top names; #'
-#         in
-#           if builtins.isAttrs result then
-#             builtins.attrNames result
-#           else
-#             ""
-# NIX_FILE
-#     ))
-
-#     # If the eval failed return the error message
-#     if [[ $? > 0 ]]; then
-#         _message "Eval failed, can't complete (an URL might not be cached):
-# $result"
-#         return 1
-#     fi
-
-#     local -a prefix=()
-#     if [[ -n $attr_path ]]; then
-#         for i in ${=attr_path//./ }; do
-#             prefix+=("($i)" .)
-#         done
-#     fi
-
-#     local package=""
-#     _wanted package package "Attribute path" \
-#             _sep_parts $prefix result \.
-#     return $?
+    for r in $result
+        echo "$prefix$r."
+    end
 end
 
 function _nix_eval_stdin
-#     setopt local_options pipefail
-#     # Build up a modified NIX_PATH using -I and --include
-#     local i override=""
-#     for ((i=1; i < ${#words[*]}; i++)); do
-#         case "${words[i]}" in
-#             -I|--include)
-#                 override+=${override:+:}${words[$((i+1))]}
-#                 ;;
-#         esac
-#     done
-#     override+=${override:+:}${NIX_PATH}
+    set -l words (commandline -poc)
+    # Build up a modified NIX_PATH using -I and --include
+    set -l override
+    for i in (seq (count $words))
+        switch "$words[$i]"
+            case "--include" "-I"
+                set -a override "$words[$(math $i + 1)]"
+        end
+    end
+    set -a override $NIX_PATH
 
-#     # Resolve channel: syntax
-#     while [[ "$override" == *(=|:)channel:* ]]; do
-#         local channel=${override#*channel:}
-#         channel="channel:"${channel%%:*}
-#         local url="https://nixos.org/channels/"${channel:8}"/nixexprs.tar.xz"
-#         # Replace the channel with its url
-#         override=${override/"$channel"/"$url"}
-#     done
+    # Resolve channel: syntax
+    for i in (seq (count $override))
+        set -l channel (string match -gr "channel:(.*)\$" -- $override[$i])
+        if test -n "$channel"
+            set url "https://nixos.org/channels/$channel/nixexprs.tar.xz"
+            # Replace the channel with its url
+            set override[$i] (string replace -- "channel:$channel" "$url" $override[$i])
+        end
+    end
 
-#     # Resolve any url to a cache, else we might trigger a blocking download
-#     while [[ "$override" == *https://* ]]; do
-#         # Find the first url
-#         local url=${override#*https://}
-#         # Strip everything starting with the first colon
-#         url="https://"${url%%:*}
-#         local cache=$(_nix_resolve_url "$url")
-#         # Replace the url with the cache
-#         override=${override/"$url"/"$cache"}
-#     done
+    # Resolve any url to a cache, else we might trigger a blocking download
+    for i in (seq (count $override))
+        set -l url (string match -gr "https://(.*)\$" -- $override[$i])
+        if test -n "$url"
+            set -l cache (_nix_resolve_url "https://$url")
+            # Replace the url with the cache
+            set override[$i] (string replace -- "https://$url" "$cache" $override[$i])
+        end
+    end
 
-#     NIX_PATH=$override nix-instantiate --eval - 2>/dev/null | tr '[]"' ' '
-#     return $?
+    begin
+        set -lx NIX_PATH $override
+        nix-instantiate --eval - 2>/dev/null | tr '[]"' ' ' | string split " " --no-empty
+    end
+    return $status
 end
 
 
@@ -294,41 +274,33 @@ end
 # commands expects it to be built. Then generate completions by calling
 # _nix_attr_paths $defexpr
 function _nix_complete_attr_paths
-
-#     local defexpr=""
-#     local file=$(_nix_get_file_arg)
-#     if [[ "$file" ]]; then
-#         # Extract --arg and --argstr into $args
-#         local i=1 args="" name="" value=""
-#         for ((i=1; i < ${#words[*]}; i++)); do
-#             case "${words[$i]}" in
-#                 --arg)
-#                     name=${(Q)words[$((i+1))]}
-#                     value=${(Q)words[$((i+2))]}
-#                     args+="$name = $value;"
-#                     i=$((i+2))
-#                     ;;
-#                 --argstr)
-#                     name=${(Q)words[$((i+1))]}
-#                     value=${(Q)words[$((i+2))]}
-#                     args+="$name = \"$value\";"
-#                     i=$((i+2))
-#                     ;;
-#             esac
-#         done
-#         args=${args:+{$args}}
-
-#         local opt
-#         defexpr="import $file $args"
-#         for opt in $words; do
-#             case $opt in
-#                 --expr|-[^-]#E[^-]#)
-#                     defexpr="($file) $args"
-#                     break
-#                     ;;
-#             esac
-#         done
-#     else
+    set -l defexpr ""
+    set -l file (_nix_get_file_arg)
+    if test -n "$file"
+        # Extract --arg and --argstr into $args
+        set -l args
+        set -l words (commandline -poc)
+        for i in (seq (count $words))
+            switch "$words[$i]"
+                case "--arg"
+                     set -a args "$(string unescape -- $words[$(math $i + 1)]) = $(string unescape -- $words[$(math $i + 2)]);"
+                case "--argstr"
+                     set -a args "$(string unescape -- $words[$(math $i + 1)]) = \"$(string unescape -- $words[$(math $i + 2)])\";"
+            end
+        end
+        if test -n "$args"
+            set args "{ $(string join " " -- $args) }"
+        else
+            set args ""
+        end
+        set defexpr "import $file $args"
+        for opt in $words
+            if string match -qr -- '-[^-]#E[^-]#' "$opt"; or test "$opt" = "--expr"
+                set defexpr "($file) $args"
+                break
+            end
+        end
+    else #FIXME: for nix-env and nix
 #         if [[ $service == nix-env ]]; then
 #             defexpr=$(_nix_gen_defexpr ~/.nix-defexpr)
 
@@ -359,117 +331,130 @@ function _nix_complete_attr_paths
 #             done
 #             defexpr+=' }'
 #         fi
-#     fi
+    end
 
-#     if [[ $defexpr ]]; then
-#         _nix_attr_paths $defexpr
-#     fi
+    if test -n "$defexpr"
+        _nix_attr_paths $defexpr
+    end
 end
 
 function _nix_resolve_url
-#     local url=$1
-#     local version="$($service --version)"
-#     local input
-#     if [[ "${version##* }" == 1.11.* ]]; then
-#         # works for nix 1.11
-#         input="$url"
-#     else
-#         # works for nix 1.12
-#         input="${url##*/}\0$url"
-#     fi
-#     local sha
-#     sha=$(nix-hash --flat --base32 --type sha256 <(printf "$input"))
-#     local cache=${XDG_CACHE_HOME:-~/.cache}/nix/tarballs
-#     local link="$cache"/"$sha"-file
-#     if [[ -e "$link" ]]; then
-#         echo "$cache/$(basename $(readlink $link))-unpacked"
-#     fi
+    set -l url "$argv[1]"
+    set -l service (commandline -poc)[1]
+    set -l version ($service --version)
+    set -l sha
+    if string match -rq '\s(1\.11\..*)$' -- $version
+        # works for nix 1.11
+        set sha (echo -n $url | nix-hash --flat --base32 --type sha256 /dev/stdin)
+    else
+        # works for nix 1.12
+        set sha (string join0 -- (string replace -r '.*/' '' -- "$url") "$url" |sed '$ s/.$//'| nix-hash --flat --base32 --type sha256 /dev/stdin)
+    end
+    set -l cache "$(
+        if set -q XDG_CACHE_HOME
+            echo "$XDG_CACHE_HOME"
+        else
+            echo "$HOME/.cache"
+        end
+    )/nix/tarballs" # FIXME: this is NOT where the cache is stored now, this is outdated
+    set -l link "$cache/$sha-file"
+    if test -e "$link"
+        echo "$cache/$(basename (readlink "$link"))-unpacked"
+    end
 end
 
 function _nix_get_file_arg
+    set -l words (commandline -poc)
+    set -l service $words[1]
+    set -l line (
+        set -l cmd (commandline -poc)
+        set -e cmd[1]
+        for i in $cmd
+            switch $i
+                case "-*"
+                    continue
+                case "*"
+                    echo $i
+            end
+        end)
 
-#     local file=""
-#     if [[ "$service" == (nix-env|nix) ]]; then
-#         local i
-#         # Extract the last seen -f/--file argument
-#         for ((i=1; i < ${#words[*]}; i++)); do
-#             case "${words[i]}" in
-#                 --file|-f)
-#                     file=${words[$((i+1))]}
-#                     ;;
-#                 -f\.)
-#                     # -f. is accepted shorthand for -f .
-#                     file=.
-#                     ;;
-#             esac
-#         done
-#     elif [[ $line ]]; then
-#         file=$line[1]
-#     elif [[ -e shell.nix && $service == nix-shell ]]; then
-#         file=shell.nix
-#     elif [[ -e default.nix ]]; then
-#         file=default.nix
-#     fi
+    set -l file
+    if test "$service" = "nix-env" -o "$service" = "nix"
+        for i in (seq (count $words))
+            switch "$words[$i]"
+                case "--file" "-f"
+                    set file "$words[$(math $i + 1)]"
+                case "-f."
+                    set file "."
+            end
+        end
+    else if test -n "$line"
+        set file "$line[1]"
+    else if test -e shell.nix -a "$service" = "nix-shell"
+        set file "shell.nix"
+    else if test -e default.nix
+        set file "default.nix"
+    end
 
-#     # Remove one level of shell quoting to make sure we see the same value as
-#     # the nix-* program will see.
-#     # ($opt_args and $line contain the verbatim string:
-#     #  eg. given `nix-shell '<nixpkgs>' -A ` $line[1] will be `'<nixpkgs>'` while
-#     #  nix-shell will see `<nixpkgs>`)
-#     file=${(Q)file}
+    # Remove one level of shell quoting to make sure we see the same value as
+    # the nix-* program will see.
+    # ($opt_args and $line contain the verbatim string:
+    #  eg. given `nix-shell '<nixpkgs>' -A ` $line[1] will be `'<nixpkgs>'` while
+    #  nix-shell will see `<nixpkgs>`)
+    set file (string unescape -- $file)
 
-#     if [[ "file" ]]; then
-#         # Expand channel: syntax
-#         if [[ "$file" == channel:* ]]; then
-#             file="https://nixos.org/channels/"${file:8}"/nixexprs.tar.xz"
-#         fi
+    if test -n "$file"
+        # Expand channel: syntax
+        if string match -q "channel:*" -- "$file"
+            set file "https://nixos.org/channels/$(string sub --start 9 -- "$file")/nixexprs.tar.xz"
+        end
+    end
 
-#         if [[ -e $file ]]; then
-#             # If the path exist use the absolute path to make sure import will
-#             # accept it.
-#             # (Otherwise the path is likely a <nixpkgs> notation)
-#             file=${file:a}
-#         elif [[ "$file" == https://* ]]; then
-#             file=$(_nix_resolve_url $file)
-#         fi
-#     fi
-#     print -n -- $file
+    if test -e "$file"
+        # If the path exist use the absolute path to make sure import will
+        # accept it.
+        # (Otherwise the path is likely a <nixpkgs> notation)
+        set file (realpath "$file")
+    else if string match -q "https://*" -- "$file"
+        set file (_nix_resolve_url "$file")
+    end
+    echo -n "$file"
 end
 
 function _nix_complete_function_arg
-#     local file=$(_nix_get_file_arg)
-#     local func=${file:+import $file} opt
-#     local i exclude=""
-#     for ((i=1; i < ${#words}; i++)); do
-#         case "${words[$i]}" in
-#             --expr|-[^-]#E[^-]#)
-#                 func="$file"
-#                 ;;
-#             --arg|--argstr)
-#                 # Don't add the name we're currently typing
-#                 [[ $i == $((CURRENT - 1)) ]] && continue
-#                 exclude+=${exclude:+|}${words[$((i+1))]}
-#                 ;;
-#         esac
-#     done
-#     if [[ ! $func ]]; then
-#         return
-#     fi
-#     local -a names
-#     names=($(_nix_eval_stdin 2>&1 <<NIX_FILE
-#              if builtins.typeOf ($func) == "lambda" then
-#                 builtins.attrNames (builtins.functionArgs ($func))
-#              else
-#                  ""
-# NIX_FILE
-#                     ))
-#     if [[ $? > 0 ]]; then
-#         _message "Eval failed, can't complete (an URL might not be cached):
-# $names"
-#         return 1
-#     fi
-#     names=(${names:#(${~exclude})})
-#     [[ "$names" ]] && _values "Argument name" $names
+    set -l file (_nix_get_file_arg)
+    set -l func ""
+    if test -n "$file"
+        set func "import $file"
+    end
+    set -l exclude
+    set -l words (commandline -poc)
+    for i in (seq (math (count $words) - 1)) # Don't exclude the currently completing --arg or --argstr
+        if string match -qr -- '-[^-]#E[^-]#' "$words[$i]"; or test "$words[$i]" = "--expr"
+            set func $file
+        end
+        if test "$words[$i]" = "--arg"; or test "$words[$i]" = "--argstr"
+            set -a exclude "$words[$(math $i + 1)]"
+        end
+    end
+    if not test -n "$func"
+        return
+    end
+    set -l get_args_expression "if builtins.typeOf ($func) == \"lambda\" then"
+    set -a get_args_expression "builtins.attrNames (builtins.functionArgs ($func))"
+    set -a get_args_expression "else"
+    set -a get_args_expression "\"\""
+    set -l names (string join \n -- $get_args_expression |_nix_eval_stdin 2>&1)
+    if test $status -gt 0
+        # _message "Eval failed, can't complete (an URL might not be cached):\n$names"
+        return 1
+    end
+
+    for i in $names
+        if not contains -- $i $exclude
+            echo $i\t"Argument name"
+        end
+    end
 end
 
 function _nix_profiles
@@ -570,8 +555,8 @@ end
 
 # Used in: nix-build, nix-env, nix-instantiate, nix-shell, nixops
 function __nix_boilerplate_opts
-#     '(- *)--help[Print help message and exit]'
-#     '(- *)--version[Print version number and exit]'
+    complete $argv -l help -d "Print help message and exit"
+    complete $argv -l version -d "Print version number and exit"
 end
 
 # Used in: nix-collect-garbage, nix-env, nix-store, nixops
@@ -620,32 +605,37 @@ function __nix_common_nixos_build_vms
 end
 
 function __nix_common_store_opts
-#     '--add-root[register result as a root of the garbage collector]:path (Hint /nix/var/nix/gcroots):_path_files -/'
-#     '--indirect[store gc root outside GC roots directory]'
+    complete $argv -l add-root -d "register result as a root of the garbage collector" -xa "(__fish_complete_directories)"
+    complete $argv -l indirect -d "store gc root outside GC roots directory"
 end
 
 # Used in: nix-build, nix-env, nix-instantiate, nix-shell and nix-store
 function __nix_extra_build_opts
-#     '--max-silent-time[max seconds without getting stdout/err from builder]:Seconds:'
-#     '--timeout[max seconds builders should run]:seconds:'
-#     '--readonly-mode[do not open Nix database]'
-#     '--log-format[configure how output is formatted]:output format:((pretty\:"Default" escapes\:"Indicate nesting with escape codes" flat\:"Remove all nesting"))'
+    complete $argv -l max-silent-time -d "max seconds without getting stdout/err from builder"
+    complete $argv -l timeout -d "max seconds builders should run"
+    complete $argv -l readonly-mode -d "do not open Nix database"
+    complete $argv -l log-format -xa "pretty\tDefault"
+    complete $argv -l log-format -xa "escapes\t'Indicate nesting with escape codes'"
+    complete $argv -l log-format -xa "flat\t'Remove all nesting'"
+    complete $argv -l log-format -d "configure how output is formatted"
 end
 
 # Used in: nix-build, nix-env, nix-instantiate, nix-shell
 function __nix_common_opts
-#     $__nix_common_nixos_rebuild
-#     $__nix_args_opts
-#     $__nix_extra_build_opts
-#     '*--include[add a path to the list of locations used to look up <...> file names]:include path:_nix_complete_includes'
-#     '*--arg[argument to pass to the Nix function]:Name:_nix_complete_function_arg:Value: '
-#     '*--argstr[pass a string]:Name:_nix_complete_function_arg:String: '
+    __nix_common_nixos_rebuild $argv
+    # __nix_args_opts $argv
+    __nix_extra_build_opts $argv
+
+    _nix_complete_includes $argv -l include
+    complete $argv -l include -d "add a path to the list of locations used to look up <...> file names"
+
+    complete $argv -l arg -d "argument to pass to the Nix function" -xa "(_nix_complete_function_arg)"
+    complete $argv -l argstr -d "pass a string" -xa "(_nix_complete_function_arg)"
 end
 
 # Options for nix-store --realise, used by nix-build
 function __nix_store_realise_opts
-#     $__nix_dry_run
-#     '--check[rebuild and see if output is deterministic]'
+    _nix_dry_run $argv
+    complete $argv -l check -d "rebuild and see if output is deterministic"
 end
 
-set _NIX_SHELL_COMPLETION_LOADED 1
