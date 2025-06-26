@@ -294,12 +294,12 @@ function _nix_complete_attr_paths
         end
         set defexpr "import $file $args"
         for opt in $words
-            if string match -qr -- '-[^-]#E[^-]#' "$opt"; or test "$opt" = "--expr"
+            if string match -qr -- '-[^-]*E[^-]*' "$opt"; or test "$opt" = "--expr"
                 set defexpr "($file) $args"
                 break
             end
         end
-    else 
+    else
         if test "$service" = "nix-env"
             set defexpr (_nix_gen_defexpr ~/.nix-defexpr)
         #FIXME: for nix
@@ -429,7 +429,7 @@ function _nix_complete_function_arg
     set -l exclude
     set -l words (commandline -poc)
     for i in (seq (math (count $words) - 1)) # Don't exclude the currently completing --arg or --argstr
-        if string match -qr -- '-[^-]#E[^-]#' "$words[$i]"; or test "$words[$i]" = "--expr"
+        if string match -qr -- '-[^-]*E[^-]*' "$words[$i]"; or test "$words[$i]" = "--expr"
             set func $file
         end
         if test "$words[$i]" = "--arg"; or test "$words[$i]" = "--argstr"
