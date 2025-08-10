@@ -639,7 +639,7 @@ end
 
 # Options for nix-store --realise, used by nix-build
 function __nix_store_realise_opts
-    _nix_dry_run $argv
+    __nix_dry_run $argv
     complete $argv -l check -d "rebuild and see if output is deterministic"
 end
 
