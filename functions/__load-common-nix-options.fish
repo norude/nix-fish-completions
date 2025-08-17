@@ -225,7 +225,7 @@ function _nix_attr_paths
     end
 
     for r in $result
-        echo "$prefix$r."
+        echo "$prefix$r"
     end
 end
 
