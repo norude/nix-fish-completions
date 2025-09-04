@@ -10,23 +10,23 @@ function __nix_store_common_opts
     __nix_common_store_opts $argv
     __nix_common_nixos_rebuild $argv
     __nix_extra_build_opts $argv
-end 
+end
 
 
-set --append options -l realise -s r 
+set --append options -l realise -s r
 __nix_store_common_opts nix-store -n "__fish_seen_argument -l realise -s r"
 __nix_store_realise_opts nix-store -n "__fish_seen_argument -l realise -s r"
 
-set --append options -l serve 
+set --append options -l serve
 __nix_store_common_opts nix-store -n "__fish_seen_argument -l serve"
 complete nix-store -n "__fish_seen_argument -l serve" -l write -d "allow writing to the nix store"
 
-set --append options -l gc 
+set --append options -l gc
 __nix_store_common_opts nix-store -n "__fish_seen_argument -l gc"
 __nix_gc_common nix-store -n "__fish_seen_argument -l gc"
 complete nix-store -n "__fish_seen_argument -l gc" -l max-freed -d "stop the gc after freeing n bytes"
 
-set --append options -l delete 
+set --append options -l delete
 __nix_store_common_opts nix-store -n "__fish_seen_argument -l delete"
 complete nix-store -n "__fish_seen_argument -l delete" -l ignore-liveness -d "Ignore reachability from roots"
 
@@ -43,36 +43,36 @@ complete nix-store -n "__fish_seen_argument -l query -s q" -l referrers -d "Prin
 complete nix-store -n "__fish_seen_argument -l query -s q" -l referrers-closure -d "Print the closure under the referrers relation"
 complete nix-store -n "__fish_seen_argument -l query -s q" -l deriver -d "Print the deriver of the store paths"
 complete nix-store -n "__fish_seen_argument -l query -s q" -l graph -d "Print the references graph of the store paths in Graphviz format"
-complete nix-store -n "__fish_seen_argument -l query -s q" -l tree -d "Print the references graph of the store paths as an ASCII tree" 
+complete nix-store -n "__fish_seen_argument -l query -s q" -l tree -d "Print the references graph of the store paths as an ASCII tree"
 complete nix-store -n "__fish_seen_argument -l query -s q" -l binding -s b -d "Print the value of an attribute of the store derivations"
 complete nix-store -n "__fish_seen_argument -l query -s q" -l hash -d "Print the SHA-256 hash of the contents of the store paths"
-complete nix-store -n "__fish_seen_argument -l query -s q" -l size -d "Print the size in bytes of the contents of the store paths" 
+complete nix-store -n "__fish_seen_argument -l query -s q" -l size -d "Print the size in bytes of the contents of the store paths"
 complete nix-store -n "__fish_seen_argument -l query -s q" -l roots -d "Print the garbage collector roots that point to the store paths"
 __nix_store_common_opts nix-store -n "__fish_seen_argument -l query -s q" -n "__fish_seen_argument -l outputs -l references -l referrers -l referrers-closure -l deriver -s d -l graph -l tree -l binding -s b -l hash -l size -l roots"
 
 
-set --append options -l verify 
+set --append options -l verify
 __nix_store_common_opts nix-store -n "__fish_seen_argument -l verify"
 complete nix-store -n "__fish_seen_argument -l verify" -l check-contents -d "Compute and validate the SHA-256 hash of each store item"
 
-set --append options -l add 
-set --append options -l verify-path 
-set --append options -l repair-path 
-set --append options -l dump 
-set --append options -l restore 
-set --append options -l export 
-set --append options -l read-log -s l 
-set --append options -l print-env 
+set --append options -l add
+set --append options -l verify-path
+set --append options -l repair-path
+set --append options -l dump
+set --append options -l restore
+set --append options -l export
+set --append options -l read-log -s l
+set --append options -l print-env
 __nix_store_common_opts nix-store -n "__fish_seen_argument -l add -l verify-path -l repair-path -l dump -l restore -l export -l read-log -s l -l print-env"
 
-set --append options -l dump-db 
-set --append options -l load-db 
-set --append options -l optimise 
-set --append options -l query-failed-paths 
+set --append options -l dump-db
+set --append options -l load-db
+set --append options -l optimise
+set --append options -l query-failed-paths
 #nothing to complete
 #
-set --append options -l import 
-set --append options -l clear-failed-paths 
+set --append options -l import
+set --append options -l clear-failed-paths
 set --append options -l generate-binary-cache-key
 complete nix-store -n "__fish_seen_argument -l generate-binary-cache-key" -n "not __fish_use_subcommand" -F
 __nix_store_common_opts nix-store -n "__fish_seen_argument -l import -l clear-failed-paths -l generate-binary-cache-key"
